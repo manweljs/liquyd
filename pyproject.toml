@@ -1,0 +1,40 @@
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "liquyd"
+version = "0.1.0"
+description = "Lightweight query and document toolkit."
+readme = "README.md"
+requires-python = ">=3.12,<4"
+authors = [
+    { name = "Your Name" }
+]
+license = { text = "MIT" }
+dependencies = [
+    "opensearch-py[async] (>=3.1.0,<4.0.0)",
+    "python-dotenv (>=1.2.2,<2.0.0)",
+]
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0,<9.0.0",
+    "pytest-asyncio>=0.24.0,<1.0.0",
+    "ruff>=0.6.0,<1.0.0",
+]
+
+[tool.poetry]
+packages = [
+    { include = "liquyd", from = "src" }
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
