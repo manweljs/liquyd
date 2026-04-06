@@ -1,0 +1,4 @@
+# liquyd.toml
+[migration]
+liquyd_config = "config.LIQUYD_CONFIG"
+migrations_dir = "migrations"

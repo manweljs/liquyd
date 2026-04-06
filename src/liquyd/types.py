@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Mapping, MutableMapping, TypeAlias
-
+from typing import Literal, TypeAlias
 
 ClientName: TypeAlias = str
 ClientConfigKey: TypeAlias = str
@@ -9,9 +8,8 @@ ClientConfigKey: TypeAlias = str
 PrimitiveValue: TypeAlias = str | int | float | bool | None
 PropertyValue: TypeAlias = PrimitiveValue | list[PrimitiveValue]
 
-DocumentData: TypeAlias = dict[str, Any]
-DocumentSource: TypeAlias = Mapping[str, Any]
-MutableDocumentSource: TypeAlias = MutableMapping[str, Any]
+DocumentData: TypeAlias = dict[str, object]
+DocumentSource: TypeAlias = dict[str, object]
 
 QueryOperator: TypeAlias = Literal[
     "eq",
@@ -25,8 +23,25 @@ QueryOperator: TypeAlias = Literal[
     "exists",
 ]
 
-ClientConfig: TypeAlias = dict[str, Any]
+EngineType: TypeAlias = Literal[
+    "keyword",
+    "text",
+    "integer",
+    "long",
+    "short",
+    "byte",
+    "double",
+    "float",
+    "half_float",
+    "scaled_float",
+    "boolean",
+    "date",
+    "object",
+    "nested",
+]
+
+ClientConfig: TypeAlias = dict[str, object]
 ClientConfigMap: TypeAlias = dict[ClientName, ClientConfig]
 
-EngineSearchParams: TypeAlias = Mapping[str, Any]
-EngineQueryBody: TypeAlias = Mapping[str, Any]
+EngineSearchParams: TypeAlias = dict[str, object]
+EngineQueryBody: TypeAlias = dict[str, object]

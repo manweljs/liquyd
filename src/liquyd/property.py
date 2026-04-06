@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from .exceptions import PropertyDefinitionError
+
+from .types import EngineType
 
 
 @dataclass(frozen=True)
@@ -15,10 +17,10 @@ class PropertyOptions:
     primary_key: bool = False
 
 
-class Property:
+class PropertyDefinition:
     def __init__(
         self,
-        python_type: type[Any] | tuple[type[Any], ...] | None = None,
+        engine_type: EngineType,
         *,
         index: bool = True,
         nullable: bool = True,
@@ -28,10 +30,9 @@ class Property:
     ) -> None:
         if primary_key:
             nullable = False
-        if primary_key and nullable:
-            raise PropertyDefinitionError("Primary key property cannot be nullable.")
 
-        self.python_type = python_type
+        self.engine_type = engine_type
+        self.python_type: type[Any] | tuple[type[Any], ...] | None = None
         self.options = PropertyOptions(
             index=index,
             nullable=nullable,
@@ -40,18 +41,6 @@ class Property:
             primary_key=primary_key,
         )
         self.attribute_name: str | None = None
-
-    def __set_name__(self, owner: type[Any], name: str) -> None:
-        self.attribute_name = name
-
-    def __get__(self, instance: Any, owner: type[Any]) -> Any:
-        if instance is None:
-            return self
-        return instance._get_property_value(self.attribute_name)
-
-    def __set__(self, instance: Any, value: Any) -> None:
-        validated_value = self.validate(value)
-        instance._set_property_value(self.attribute_name, validated_value)
 
     @property
     def resolved_name(self) -> str:
@@ -66,6 +55,15 @@ class Property:
     @property
     def primary_key(self) -> bool:
         return self.options.primary_key
+
+    def bind(
+        self,
+        *,
+        attribute_name: str,
+        python_type: type[Any] | tuple[type[Any], ...] | None,
+    ) -> None:
+        self.attribute_name = attribute_name
+        self.python_type = python_type
 
     def get_default_value(self) -> Any:
         default_value = self.options.default
@@ -94,10 +92,21 @@ class Property:
 
         return value
 
+    def to_mapping(self) -> dict[str, Any]:
+        mapping: dict[str, Any] = {
+            "type": self.engine_type,
+        }
+
+        if not self.options.index:
+            mapping["index"] = False
+
+        return mapping
+
     def export_definition(self) -> dict[str, Any]:
         return {
             "attribute_name": self.attribute_name,
             "name": self.resolved_name,
+            "engine_type": self.engine_type,
             "python_type": self._get_expected_type_name(),
             "index": self.options.index,
             "nullable": self.options.nullable,
@@ -113,3 +122,36 @@ class Property:
             return ", ".join(single_type.__name__ for single_type in self.python_type)
 
         return self.python_type.__name__
+
+
+class BoundProperty:
+    def __init__(self, definition: PropertyDefinition) -> None:
+        self.definition = definition
+
+    def __get__(self, instance: Any, owner: type[Any]) -> Any:
+        if instance is None:
+            return self.definition
+        return instance._get_property_value(self.definition.attribute_name)
+
+    def __set__(self, instance: Any, value: Any) -> None:
+        validated_value = self.definition.validate(value)
+        instance._set_property_value(self.definition.attribute_name, validated_value)
+
+
+def Property(
+    engine_type: EngineType,
+    *,
+    index: bool = True,
+    nullable: bool = True,
+    default: Any = None,
+    name: str | None = None,
+    primary_key: bool = False,
+) -> Any:
+    return PropertyDefinition(
+        engine_type=engine_type,
+        index=index,
+        nullable=nullable,
+        default=default,
+        name=name,
+        primary_key=primary_key,
+    )

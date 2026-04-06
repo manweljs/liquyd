@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, cast
+import types
+from typing import Any, Union, cast, get_args, get_origin, get_type_hints
 
 from .config import get_client_engine, get_default_client_name
 from .document_registry import register_document
 from .engines.registry import get_engine
 from .exceptions import DocumentDefinitionError
-from .property import Property
+from .property import BoundProperty, PropertyDefinition
 
 
 class DocumentMeta(type):
@@ -21,16 +22,33 @@ class DocumentMeta(type):
             super().__new__(cls, name, bases, attrs),
         )
 
-        properties: dict[str, Property] = {}
+        properties: dict[str, PropertyDefinition] = {}
 
         for base_class in reversed(bases):
             base_properties = getattr(base_class, "__properties__", None)
             if base_properties:
                 properties.update(base_properties)
 
-        for attribute_name, attribute_value in attrs.items():
-            if isinstance(attribute_value, Property):
-                properties[attribute_name] = attribute_value
+        resolved_type_hints = get_type_hints(document_class)
+
+        for attribute_name, attribute_value in list(vars(document_class).items()):
+            if not isinstance(attribute_value, PropertyDefinition):
+                continue
+
+            annotation = resolved_type_hints.get(attribute_name)
+            if annotation is None:
+                raise DocumentDefinitionError(
+                    f"Property '{attribute_name}' on document '{name}' must have a type annotation."
+                )
+
+            python_type = cls._resolve_runtime_python_type(annotation)
+            attribute_value.bind(
+                attribute_name=attribute_name,
+                python_type=python_type,
+            )
+
+            properties[attribute_name] = attribute_value
+            setattr(document_class, attribute_name, BoundProperty(attribute_value))
 
         setattr(document_class, "__properties__", properties)
 
@@ -43,9 +61,58 @@ class DocumentMeta(type):
 
         return document_class
 
+    @staticmethod
+    def _resolve_runtime_python_type(
+        annotation: Any,
+    ) -> type[Any] | tuple[type[Any], ...] | None:
+        origin = get_origin(annotation)
+
+        if origin in (types.UnionType, Union):
+            resolved_types: list[type[Any]] = []
+
+            for argument in get_args(annotation):
+                if argument is type(None):
+                    continue
+
+                resolved_argument_type = DocumentMeta._resolve_runtime_python_type(
+                    argument
+                )
+                if resolved_argument_type is None:
+                    continue
+
+                if isinstance(resolved_argument_type, tuple):
+                    resolved_types.extend(resolved_argument_type)
+                else:
+                    resolved_types.append(resolved_argument_type)
+
+            unique_resolved_types: list[type[Any]] = []
+            for resolved_type in resolved_types:
+                if resolved_type not in unique_resolved_types:
+                    unique_resolved_types.append(resolved_type)
+
+            if not unique_resolved_types:
+                return None
+
+            if len(unique_resolved_types) == 1:
+                return unique_resolved_types[0]
+
+            return tuple(unique_resolved_types)
+
+        if origin is not None:
+            raise DocumentDefinitionError(
+                f"Unsupported annotation '{annotation}' for Liquyd Property."
+            )
+
+        if not isinstance(annotation, type):
+            raise DocumentDefinitionError(
+                f"Unsupported annotation '{annotation}' for Liquyd Property."
+            )
+
+        return annotation
+
 
 class BaseDocument(metaclass=DocumentMeta):
-    __properties__: dict[str, Property]
+    __properties__: dict[str, PropertyDefinition]
     __index_name__: str | None = None
 
     def __init__(self, **kwargs: Any) -> None:
@@ -78,11 +145,11 @@ class BaseDocument(metaclass=DocumentMeta):
         return cls.__index_name__
 
     @classmethod
-    def get_properties(cls) -> dict[str, Property]:
+    def get_properties(cls) -> dict[str, PropertyDefinition]:
         return dict(cls.__properties__)
 
     @classmethod
-    def get_property(cls, name: str) -> Property:
+    def get_property(cls, name: str) -> PropertyDefinition:
         property_instance = cls.__properties__.get(name)
         if property_instance is None:
             raise DocumentDefinitionError(
@@ -91,7 +158,7 @@ class BaseDocument(metaclass=DocumentMeta):
         return property_instance
 
     @classmethod
-    def get_primary_key_property(cls) -> Property:
+    def get_primary_key_property(cls) -> PropertyDefinition:
         primary_key_properties = [
             property_instance
             for property_instance in cls.__properties__.values()
@@ -118,6 +185,21 @@ class BaseDocument(metaclass=DocumentMeta):
                 f"Primary key property name is not set on document '{cls.__name__}'."
             )
         return primary_key_property.attribute_name
+
+    @classmethod
+    def get_mapping_properties(cls) -> dict[str, Any]:
+        return {
+            property_instance.resolved_name: property_instance.to_mapping()
+            for property_instance in cls.__properties__.values()
+        }
+
+    @classmethod
+    def get_mapping_body(cls) -> dict[str, Any]:
+        return {
+            "mappings": {
+                "properties": cls.get_mapping_properties(),
+            }
+        }
 
     def get_primary_key_value(self) -> Any:
         primary_key_name = self.__class__.get_primary_key_name()
@@ -203,6 +285,7 @@ class BaseDocument(metaclass=DocumentMeta):
                 property_name: property_instance.export_definition()
                 for property_name, property_instance in cls.__properties__.items()
             },
+            "mapping": cls.get_mapping_body(),
         }
 
     async def save(self, *, client_name: str | None = None) -> BaseDocument:

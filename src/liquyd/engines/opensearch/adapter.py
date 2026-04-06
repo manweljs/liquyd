@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy import NotFoundError
+
 from ..base import EngineAdapter
 from .client import get_opensearch_client
 from .translator import translate_queryset
-from opensearchpy import NotFoundError
 
 if TYPE_CHECKING:
     from ...queryset import QuerySet
@@ -34,16 +35,15 @@ class OpenSearchEngineAdapter(EngineAdapter):
         source = dict(hit.get("_source", {}))
         document_id = hit.get("_id")
 
-        document = queryset.document_class.from_dict(
+        primary_key_name = queryset.document_class.get_primary_key_name()
+        if primary_key_name not in source and document_id is not None:
+            source[primary_key_name] = document_id
+
+        return queryset.document_class.from_dict(
             source,
             by_name=True,
             is_persisted=True,
         )
-
-        if document_id is not None:
-            document.set_primary_key_value(document_id)
-
-        return document
 
     def _get_primary_key_filter_value(self, queryset: QuerySet) -> Any | None:
         primary_key_name = queryset.document_class.get_primary_key_name()
@@ -56,7 +56,30 @@ class OpenSearchEngineAdapter(EngineAdapter):
 
         return queryset.filters[primary_key_name]
 
+    async def _get_by_primary_key(
+        self, queryset: QuerySet, primary_key_value: Any
+    ) -> Any:
+        client = self.get_client(queryset.client_name)
+
+        try:
+            response = await client.get(
+                index=queryset.get_index_name(),
+                id=primary_key_value,
+            )
+        except NotFoundError as exc:
+            raise LookupError("No document matched the query.") from exc
+
+        return self._hydrate_hit(queryset, dict(response))
+
     async def execute(self, queryset: QuerySet) -> list[Any]:
+        primary_key_value = self._get_primary_key_filter_value(queryset)
+        if primary_key_value is not None:
+            try:
+                document = await self._get_by_primary_key(queryset, primary_key_value)
+            except LookupError:
+                return []
+            return [document]
+
         client = self.get_client(queryset.client_name)
         request_body = self.build_query(queryset)
 
@@ -72,7 +95,7 @@ class OpenSearchEngineAdapter(EngineAdapter):
         primary_key_value = self._get_primary_key_filter_value(queryset)
         if primary_key_value is not None:
             try:
-                return await self.get(queryset)
+                return await self._get_by_primary_key(queryset, primary_key_value)
             except LookupError:
                 return None
 
@@ -94,17 +117,7 @@ class OpenSearchEngineAdapter(EngineAdapter):
     async def get(self, queryset: QuerySet) -> Any:
         primary_key_value = self._get_primary_key_filter_value(queryset)
         if primary_key_value is not None:
-            client = self.get_client(queryset.client_name)
-
-            try:
-                response = await client.get(
-                    index=queryset.get_index_name(),
-                    id=primary_key_value,
-                )
-            except NotFoundError as exc:
-                raise LookupError("No document matched the query.") from exc
-
-            return self._hydrate_hit(queryset, dict(response))
+            return await self._get_by_primary_key(queryset, primary_key_value)
 
         client = self.get_client(queryset.client_name)
         request_body = self.build_query(queryset)
@@ -136,19 +149,17 @@ class OpenSearchEngineAdapter(EngineAdapter):
         client = self.get_client(client_name)
         index_name = document_class.get_index_name()
 
-        if document_id is None:
-            response = await client.index(
-                index=index_name,
-                body=source,
-                refresh=True,
-            )
-        else:
-            response = await client.index(
-                index=index_name,
-                id=document_id,
-                body=source,
-                refresh=True,
-            )
+        primary_key_name = document_class.get_primary_key_name()
+        resolved_document_id = document_id
+        if resolved_document_id is None:
+            resolved_document_id = source.get(primary_key_name)
+
+        response = await client.index(
+            index=index_name,
+            id=resolved_document_id,
+            body=source,
+            refresh=True,
+        )
 
         return {
             "document_id": response.get("_id"),
@@ -187,6 +198,7 @@ class OpenSearchEngineAdapter(EngineAdapter):
         client = self.get_client(client_name)
         index_name = document_class.get_index_name()
         index_settings = self.get_index_settings(client_name)
+        mapping_body = document_class.get_mapping_body()
 
         index_exists = await client.indices.exists(index=index_name)
         if index_exists:
@@ -200,8 +212,10 @@ class OpenSearchEngineAdapter(EngineAdapter):
             index=index_name,
             body={
                 "settings": index_settings,
+                **mapping_body,
             },
         )
+
         return {
             "acknowledged": bool(response.get("acknowledged", False)),
             "index": index_name,

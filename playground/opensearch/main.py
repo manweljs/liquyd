@@ -1,71 +1,73 @@
-import asyncio
-import random
-from uuid import uuid4
+# cli/main.py
+from __future__ import annotations
 
-import config
-import documents
-from liquyd.engines.opensearch.client import get_opensearch_client
-from liquyd.sync import create_all_indexes
-from documents import PlaygroundLog
-
-
-async def create_sample_data() -> None:
-
-    methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
-    endpoint_paths = [
-        "/api/logs",
-        "/api/health",
-        "/api/auth/login",
-        "/api/users",
-        "/api/projects",
-    ]
-    project_names = ["playground", "central-obs", "liquyd"]
-    status_codes = [200, 201, 400, 401, 403, 404, 500]
-
-    for _ in range(10):
-        log = PlaygroundLog(
-            id=str(uuid4()),
-            project_name=random.choice(project_names),
-            endpoint_path=random.choice(endpoint_paths),
-            status_code=random.choice(status_codes),
-            method=random.choice(methods),
-        )
-        await log.save()
-        print("saved:", log)
+import argparse
+import pprint
+from pathlib import Path
+from typing import Any
+import tomllib
 
 
-async def query_sample_data() -> None:
-    logs = await PlaygroundLog.filter(project_name="playground").all()
-    print("Queried logs:", logs)
+def _load_liquyd_toml(base_directory: Path | None = None) -> dict[str, Any]:
+    root_directory = base_directory or Path.cwd()
+    config_path = root_directory / "liquyd.toml"
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"liquyd.toml was not found at '{config_path}'.")
+
+    with config_path.open("rb") as file:
+        return tomllib.load(file)
 
 
-async def main() -> None:
-    client = get_opensearch_client()
+def _get_migration_settings(config: dict[str, Any]) -> dict[str, Any]:
+    migration_settings = config.get("migration")
+    if not isinstance(migration_settings, dict):
+        raise ValueError("Section [migration] is required in liquyd.toml.")
 
-    try:
-        await create_all_indexes()
+    return migration_settings
 
-        # first_log = await PlaygroundLog.filter(project_name="playground").first()
-        # print("first_log:", first_log)
 
-        # one_log = await PlaygroundLog.get(id="83678764-38e7-4603-8c43-c2181110d66b")
-        # print("one_log:", one_log)
+def _run_makemigrations() -> int:
+    config = _load_liquyd_toml()
+    migration_settings = _get_migration_settings(config)
 
-        # maybe_log = await PlaygroundLog.get_or_none(id="not-found")
-        # print("maybe_log:", maybe_log)
+    migrations_dir = migration_settings.get("migrations_dir")
+    if not migrations_dir:
+        raise ValueError("Key 'migration.migrations_dir' is required in liquyd.toml.")
 
-        # if first_log is not None:
-        #     await first_log.delete()
-        #     print("deleted:", first_log)
+    migrations_path = Path(migrations_dir)
+    if not migrations_path.is_absolute():
+        migrations_path = Path.cwd() / migrations_path
 
-        # await query_sample_data()
-        all_logs = await documents.PlaygroundLog.filter().all()
-        print("total:", len(all_logs))
-        print("all_logs:", all_logs)
+    migrations_path.mkdir(parents=True, exist_ok=True)
 
-    finally:
-        await client.close()
+    print("Liquyd config:")
+    pprint.pprint(config)
+    print("")
+    print(f"Migrations directory ready: {migrations_path}")
+
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="liquyd")
+    subparsers = parser.add_subparsers(dest="command")
+
+    subparsers.add_parser("makemigrations")
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command == "makemigrations":
+        return _run_makemigrations()
+
+    parser.print_help()
+    return 1
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(main())

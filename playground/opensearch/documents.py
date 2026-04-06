@@ -2,11 +2,19 @@ from liquyd import BaseDocument, Property
 
 
 class PlaygroundLog(BaseDocument):
-    id = Property(str, primary_key=True)
-    project_name = Property(str)
-    endpoint_path = Property(str)
-    status_code = Property(int, nullable=True)
-    method = Property(str, nullable=True)
+    id: str = Property("keyword", primary_key=True)
+    project_name: str = Property("keyword")
+    endpoint_path: str = Property("keyword")
+    status_code: int | None = Property("integer", nullable=True)
+    method: str | None = Property("keyword", nullable=True)
 
     class Meta:
         index = "liquyd_playground_logs"
+
+
+class PlaygroundUser(BaseDocument):
+    username: str = Property("keyword", primary_key=True)
+    full_name: str = Property("text")
+
+    class Meta:
+        index = "liquyd_playground_users"
