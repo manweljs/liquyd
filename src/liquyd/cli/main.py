@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from liquyd.cli.commands.makemigrations import makemigrations
+from liquyd.cli.commands.migrate import migrate
 
 
 def _load_liquyd_toml(base_directory: Path | None = None) -> dict[str, Any]:
@@ -151,7 +152,7 @@ def _import_document_modules(
     return imported_module_paths
 
 
-def _run_makemigrations() -> int:
+def _prepare_cli_context() -> tuple[dict[str, Any], Path, Any, Path, list[Path]]:
     config = _load_liquyd_toml()
     migration_settings = _get_migration_settings(config)
 
@@ -171,6 +172,22 @@ def _run_makemigrations() -> int:
         config_file_path=config_file_path,
     )
 
+    migrations_path = Path(migrations_dir)
+    if not migrations_path.is_absolute():
+        migrations_path = Path.cwd() / migrations_path
+
+    migrations_path.mkdir(parents=True, exist_ok=True)
+
+    return (
+        config,
+        config_file_path,
+        liquyd_config,
+        migrations_path,
+        imported_module_paths,
+    )
+
+
+def _print_imported_document_modules(imported_module_paths: list[Path]) -> None:
     if imported_module_paths:
         print("Imported document modules:")
         for imported_module_path in imported_module_paths:
@@ -179,11 +196,11 @@ def _run_makemigrations() -> int:
         print("Imported document modules:")
         print("  - <none>")
 
-    migrations_path = Path(migrations_dir)
-    if not migrations_path.is_absolute():
-        migrations_path = Path.cwd() / migrations_path
 
-    migrations_path.mkdir(parents=True, exist_ok=True)
+def _run_makemigrations() -> int:
+    _, _, liquyd_config, migrations_path, imported_module_paths = _prepare_cli_context()
+
+    _print_imported_document_modules(imported_module_paths)
 
     migration_file_path = makemigrations(base_directory=migrations_path)
 
@@ -192,6 +209,28 @@ def _run_makemigrations() -> int:
         return 0
 
     print(f"Migration created: {migration_file_path}")
+    return 0
+
+
+def _run_migrate() -> int:
+    _, _, liquyd_config, migrations_path, imported_module_paths = _prepare_cli_context()
+
+    _print_imported_document_modules(imported_module_paths)
+
+    applied_migration_names = migrate(
+        base_directory=migrations_path,
+        liquyd_config=liquyd_config,
+        client_name="default",
+    )
+
+    if not applied_migration_names:
+        print("No pending migrations.")
+        return 0
+
+    print("Applied migrations:")
+    for migration_name in applied_migration_names:
+        print(f"  - {migration_name}")
+
     return 0
 
 
@@ -214,8 +253,7 @@ def main() -> int:
         return _run_makemigrations()
 
     if args.command == "migrate":
-        print("migrate is not implemented yet.")
-        return 0
+        return _run_migrate()
 
     if args.command == "validate":
         print("validate is not implemented yet.")

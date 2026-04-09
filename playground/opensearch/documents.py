@@ -18,3 +18,12 @@ class PlaygroundUser(BaseDocument):
 
     class Meta:
         index = "liquyd_playground_users"
+
+
+class PlaygroundProduct(BaseDocument):
+    product_id: str = Property("keyword", primary_key=True)
+    name: str = Property("text")
+    sku: str | None = Property("keyword", nullable=True)
+
+    class Meta:
+        index = "liquyd_playground_products"

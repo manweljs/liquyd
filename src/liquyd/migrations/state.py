@@ -6,6 +6,10 @@ from datetime import UTC, datetime
 from typing import Any, Iterable, List
 
 
+def get_migration_index_name(client_name: str) -> str:
+    return f"liquyd_migrations_{client_name}"
+
+
 @dataclass(frozen=True)
 class AppliedMigrationRecord:
     migration_name: str
