@@ -21,5 +21,6 @@ LIQUYD_CONFIG = {
         ),
         "use_ssl": os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true",
         "verify_certs": os.getenv("OPENSEARCH_VERIFY_SSL", "true").lower() == "true",
+        "documents": ["documents"],
     }
 }

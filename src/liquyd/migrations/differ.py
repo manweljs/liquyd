@@ -1,3 +1,4 @@
+# src/liquyd/migrations/differ.py
 from __future__ import annotations
 
 from liquyd.migrations.types import (
@@ -22,7 +23,6 @@ def _document_snapshot_to_dict(document_snapshot: DocumentSnapshot) -> dict:
     return {
         "document_name": document_snapshot.document_name,
         "index_name": document_snapshot.index_name,
-        "client_name": document_snapshot.client_name,
         "fields": {
             field_name: _field_snapshot_to_dict(field_snapshot)
             for field_name, field_snapshot in document_snapshot.fields.items()

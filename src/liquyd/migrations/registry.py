@@ -1,4 +1,4 @@
-# registry.py
+# src/liquyd/migrations/registry.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,7 +23,7 @@ class ClientSettings:
 
 
 ClientSettingsResolver = Callable[[str], ClientSettings]
-DocumentDiscoveryResolver = Callable[[str], list[type]]
+DocumentDiscoveryResolver = Callable[[], list[type]]
 
 
 _client_settings_resolver: ClientSettingsResolver | None = None
@@ -55,11 +55,11 @@ def get_client_adapter(client_name: str) -> EngineMigrationAdapter:
     return client_settings.adapter_factory(client_settings)
 
 
-def discover_client_documents(client_name: str) -> list[type]:
+def discover_documents() -> list[type]:
     if _document_discovery_resolver is None:
         raise RuntimeError(
             "Document discovery resolver is not configured. "
             "Call set_document_discovery_resolver(...) during Liquyd setup."
         )
 
-    return _document_discovery_resolver(client_name)
+    return _document_discovery_resolver()

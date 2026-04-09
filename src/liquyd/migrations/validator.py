@@ -1,3 +1,4 @@
+# src/liquyd/migrations/validator.py
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -11,7 +12,6 @@ from liquyd.migrations.types import MigrationFile
 
 @dataclass(frozen=True)
 class ValidationResult:
-    client_name: str
     is_in_sync: bool
     has_migrations: bool
     has_pending_migrations: bool
@@ -35,22 +35,19 @@ def _get_pending_migration_names(
 
 
 def validate_client_migrations(
-    client_name: str,
     base_directory: str | Path,
     applied_migration_names: Iterable[str] | None = None,
 ) -> ValidationResult:
     applied_migration_names = applied_migration_names or []
 
-    current_snapshot_state = build_snapshot_state(client_name=client_name)
+    current_snapshot_state = build_snapshot_state()
     current_snapshot = asdict(current_snapshot_state)
 
     migrations = load_client_migrations(
         base_directory=Path(base_directory),
-        client_name=client_name,
     )
     last_migration = get_last_migration(
         base_directory=Path(base_directory),
-        client_name=client_name,
     )
 
     pending_migration_names = _get_pending_migration_names(
@@ -60,7 +57,6 @@ def validate_client_migrations(
 
     if last_migration is None:
         return ValidationResult(
-            client_name=client_name,
             is_in_sync=False,
             has_migrations=False,
             has_pending_migrations=False,
@@ -76,7 +72,6 @@ def validate_client_migrations(
     has_pending_migrations = len(pending_migration_names) > 0
 
     return ValidationResult(
-        client_name=client_name,
         is_in_sync=not schema_changed and not has_pending_migrations,
         has_migrations=True,
         has_pending_migrations=has_pending_migrations,

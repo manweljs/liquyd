@@ -1,3 +1,4 @@
+# src/liquyd/migrations/types.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -27,13 +28,11 @@ class FieldSnapshot:
 class DocumentSnapshot:
     document_name: str
     index_name: str
-    client_name: str
     fields: dict[str, FieldSnapshot]
 
 
 @dataclass(frozen=True)
 class SnapshotState:
-    client_name: str
     documents: dict[str, DocumentSnapshot]
 
 
@@ -71,7 +70,6 @@ OperationDict = Dict[str, Any]
 @dataclass(frozen=True)
 class MigrationFile:
     name: str
-    client_name: str
     created_at: str
     previous_migration_name: Optional[str]
     snapshot: SnapshotDict

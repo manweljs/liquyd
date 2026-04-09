@@ -1,15 +1,11 @@
-# discovery.py
+# src/liquyd/migrations/discovery.py
 from __future__ import annotations
 
 from typing import Iterable, Type
 
-from liquyd.migrations.registry import discover_client_documents
+from liquyd.document_registry import list_documents
 
 
-def discover_documents(client_name: str) -> list[Type]:
-    return discover_client_documents(client_name)
-
-
-def iter_documents(client_name: str) -> Iterable[Type]:
-    for document_class in discover_documents(client_name):
+def iter_documents() -> Iterable[Type]:
+    for document_class in list_documents():
         yield document_class

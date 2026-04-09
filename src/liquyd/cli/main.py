@@ -1,12 +1,13 @@
-# main.py
+# src/liquyd/cli/main.py
 from __future__ import annotations
 
 import argparse
 import importlib.util
-import pprint
 import tomllib
 from pathlib import Path
 from typing import Any
+
+from liquyd.cli.commands.makemigrations import makemigrations
 
 
 def _load_liquyd_toml(base_directory: Path | None = None) -> dict[str, Any]:
@@ -28,6 +29,21 @@ def _get_migration_settings(config: dict[str, Any]) -> dict[str, Any]:
     return migration_settings
 
 
+def _resolve_config_module_file_path(config_reference: str) -> tuple[Path, str]:
+    module_path_text, separator, attribute_name = config_reference.rpartition(".")
+    if separator == "":
+        raise ValueError(
+            "Key 'migration.liquyd_config' must be in the format "
+            "'relative_file.py.ATTRIBUTE'."
+        )
+
+    module_file_path = Path.cwd() / module_path_text.replace(".", "/")
+    if module_file_path.suffix != ".py":
+        module_file_path = module_file_path.with_suffix(".py")
+
+    return module_file_path, attribute_name
+
+
 def _load_python_file_module(module_file_path: Path):
     if not module_file_path.exists():
         raise FileNotFoundError(
@@ -45,17 +61,9 @@ def _load_python_file_module(module_file_path: Path):
 
 
 def _load_liquyd_config_object(config_reference: str) -> Any:
-    module_path_text, separator, attribute_name = config_reference.rpartition(".")
-    if separator == "":
-        raise ValueError(
-            "Key 'migration.liquyd_config' must be in the format "
-            "'relative_file.py.ATTRIBUTE'."
-        )
-
-    module_file_path = Path.cwd() / module_path_text.replace(".", "/")
-    if module_file_path.suffix != ".py":
-        module_file_path = module_file_path.with_suffix(".py")
-
+    module_file_path, attribute_name = _resolve_config_module_file_path(
+        config_reference
+    )
     module = _load_python_file_module(module_file_path)
 
     try:
@@ -65,6 +73,82 @@ def _load_liquyd_config_object(config_reference: str) -> Any:
             f"Attribute '{attribute_name}' was not found in file "
             f"'{module_file_path}'."
         ) from error
+
+
+def _collect_document_module_paths(liquyd_config: Any) -> list[str]:
+    if not isinstance(liquyd_config, dict):
+        raise ValueError("LIQUYD_CONFIG must be a dictionary.")
+
+    document_module_paths: list[str] = []
+
+    for client_settings in liquyd_config.values():
+        if not isinstance(client_settings, dict):
+            continue
+
+        documents = client_settings.get("documents")
+        if documents is None:
+            continue
+
+        if not isinstance(documents, list):
+            raise ValueError("Key 'documents' must be a list of module paths.")
+
+        for document_module_path in documents:
+            if not isinstance(document_module_path, str):
+                raise ValueError(
+                    "Each item in 'documents' must be a string module path."
+                )
+
+            normalized_document_module_path = document_module_path.strip()
+            if not normalized_document_module_path:
+                continue
+
+            if normalized_document_module_path not in document_module_paths:
+                document_module_paths.append(normalized_document_module_path)
+
+    return document_module_paths
+
+
+def _resolve_document_module_file_path(
+    config_file_path: Path,
+    document_module_path: str,
+) -> Path:
+    relative_module_path = Path(*document_module_path.split("."))
+
+    search_directories = [config_file_path.parent, *config_file_path.parent.parents]
+
+    for search_directory in search_directories:
+        module_file_path = search_directory / relative_module_path.with_suffix(".py")
+        if module_file_path.exists():
+            return module_file_path
+
+        package_file_path = search_directory / relative_module_path / "__init__.py"
+        if package_file_path.exists():
+            return package_file_path
+
+        if search_directory == Path.cwd():
+            break
+
+    raise FileNotFoundError(
+        f"Document module '{document_module_path}' could not be resolved from "
+        f"config file '{config_file_path}'."
+    )
+
+
+def _import_document_modules(
+    liquyd_config: Any,
+    config_file_path: Path,
+) -> list[Path]:
+    imported_module_paths: list[Path] = []
+
+    for document_module_path in _collect_document_module_paths(liquyd_config):
+        module_file_path = _resolve_document_module_file_path(
+            config_file_path=config_file_path,
+            document_module_path=document_module_path,
+        )
+        _load_python_file_module(module_file_path)
+        imported_module_paths.append(module_file_path)
+
+    return imported_module_paths
 
 
 def _run_makemigrations() -> int:
@@ -80,6 +164,20 @@ def _run_makemigrations() -> int:
         raise ValueError("Key 'migration.liquyd_config' is required in liquyd.toml.")
 
     liquyd_config = _load_liquyd_config_object(liquyd_config_path)
+    config_file_path, _ = _resolve_config_module_file_path(liquyd_config_path)
+
+    imported_module_paths = _import_document_modules(
+        liquyd_config=liquyd_config,
+        config_file_path=config_file_path,
+    )
+
+    if imported_module_paths:
+        print("Imported document modules:")
+        for imported_module_path in imported_module_paths:
+            print(f"  - {imported_module_path}")
+    else:
+        print("Imported document modules:")
+        print("  - <none>")
 
     migrations_path = Path(migrations_dir)
     if not migrations_path.is_absolute():
@@ -87,16 +185,13 @@ def _run_makemigrations() -> int:
 
     migrations_path.mkdir(parents=True, exist_ok=True)
 
-    print("Liquyd TOML config:")
-    pprint.pprint(config)
-    print()
+    migration_file_path = makemigrations(base_directory=migrations_path)
 
-    print("Liquyd loaded config:")
-    pprint.pprint(liquyd_config)
-    print()
+    if migration_file_path is None:
+        print("No changes detected.")
+        return 0
 
-    print(f"Migrations directory ready: {migrations_path}")
-
+    print(f"Migration created: {migration_file_path}")
     return 0
 
 

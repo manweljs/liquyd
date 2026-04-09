@@ -1,6 +1,6 @@
+# src/liquyd/migrations/runner.py
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
 
@@ -71,7 +71,6 @@ def apply_migration(
 
     applied_record = build_applied_migration_record(
         migration_name=migration.name,
-        client_name=migration.client_name,
         document_snapshot=migration.snapshot,
         operations=migration.operations,
     )
@@ -79,7 +78,6 @@ def apply_migration(
 
 
 def migrate_client(
-    client_name: str,
     base_directory: str | Path,
     applied_migration_names: list[str],
     operation_handlers: dict[str, OperationHandler],
@@ -88,7 +86,6 @@ def migrate_client(
 ) -> list[str]:
     pending_migrations = iter_pending_migrations(
         base_directory=Path(base_directory),
-        client_name=client_name,
         applied_migration_names=applied_migration_names,
     )
 

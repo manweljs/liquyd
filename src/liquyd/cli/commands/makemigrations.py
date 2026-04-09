@@ -1,12 +1,12 @@
-# makemigrations.py
+# src/liquyd/cli/commands/makemigrations.py
 from __future__ import annotations
 
 from pathlib import Path
 
 from liquyd.migrations.differ import diff_snapshot_states
+from liquyd.migrations.discovery import iter_documents
 from liquyd.migrations.loader import get_last_migration
 from liquyd.migrations.planner import plan_operations
-from liquyd.migrations.registry import get_client_settings
 from liquyd.migrations.snapshot import (
     build_snapshot_state,
     build_snapshot_state_from_dict,
@@ -15,17 +15,20 @@ from liquyd.migrations.writer import write_migration_file
 
 
 def makemigrations(
-    client_name: str,
+    base_directory: Path,
     name: str | None = None,
 ) -> Path | None:
-    client_settings = get_client_settings(client_name)
-    base_directory = Path(client_settings.migrations_directory)
+    discovered_documents = list(iter_documents())
 
-    current_snapshot_state = build_snapshot_state(client_name=client_name)
-    last_migration = get_last_migration(
-        base_directory=base_directory,
-        client_name=client_name,
-    )
+    print("Discovered documents:")
+    if not discovered_documents:
+        print("  - <none>")
+    else:
+        for document_class in discovered_documents:
+            print(f"  - {document_class.__module__}.{document_class.__name__}")
+
+    current_snapshot_state = build_snapshot_state()
+    last_migration = get_last_migration(base_directory=base_directory)
 
     previous_snapshot_state = None
     previous_migration_name = None
@@ -46,7 +49,6 @@ def makemigrations(
         return None
 
     return write_migration_file(
-        client_name=client_name,
         snapshot_state=current_snapshot_state,
         operations=operations,
         name=name,

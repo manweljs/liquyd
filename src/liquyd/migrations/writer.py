@@ -1,68 +1,55 @@
+# src/liquyd/migrations/writer.py
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
-
-from liquyd.migrations.types import (
-    MigrationFile,
-    MigrationOperation,
-    SnapshotState,
-)
+from typing import Any, cast
 
 
-def get_migrations_root(base_path: str | Path | None = None) -> Path:
-    if base_path is not None:
-        return Path(base_path)
+def _serialize_value(value: Any) -> Any:
+    if not isinstance(value, type) and is_dataclass(value):
+        return asdict(cast(Any, value))
 
-    return Path.cwd() / "migrations"
+    if isinstance(value, list):
+        return [_serialize_value(item) for item in value]
 
+    if isinstance(value, dict):
+        return {key: _serialize_value(item_value) for key, item_value in value.items()}
 
-def ensure_client_directory(
-    client_name: str,
-    base_path: str | Path | None = None,
-) -> Path:
-    client_directory = get_migrations_root(base_path=base_path) / client_name
-    client_directory.mkdir(parents=True, exist_ok=True)
-    return client_directory
-
-
-def build_migration_name(name: str | None = None) -> tuple[str, str]:
-    created_at = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    suffix = name or "auto"
-    migration_name = f"{created_at}_{suffix}"
-    return migration_name, created_at
+    return value
 
 
 def write_migration_file(
-    client_name: str,
-    snapshot_state: SnapshotState,
-    operations: list[MigrationOperation],
+    snapshot_state: Any,
+    operations: list[Any],
+    base_path: Path,
     name: str | None = None,
-    previous_migration_name: Optional[str] = None,
-    base_path: str | Path | None = None,
+    previous_migration_name: str | None = None,
 ) -> Path:
-    migration_name, created_at = build_migration_name(name=name)
-    client_directory = ensure_client_directory(
-        client_name=client_name,
-        base_path=base_path,
-    )
-    output_path = client_directory / f"{migration_name}.json"
+    created_at = datetime.now(UTC)
+    timestamp = created_at.strftime("%Y%m%d_%H%M%S")
 
-    migration_file = MigrationFile(
-        name=migration_name,
-        client_name=client_name,
-        created_at=created_at,
-        previous_migration_name=previous_migration_name,
-        snapshot=asdict(snapshot_state),
-        operations=[asdict(operation) for operation in operations],
-        path=str(output_path),
+    migration_name = timestamp
+    if name:
+        migration_name = f"{migration_name}_{name}"
+
+    migration_file_path = base_path / f"{migration_name}.json"
+
+    migration_payload = {
+        "name": migration_name,
+        "created_at": created_at.isoformat(),
+        "previous": previous_migration_name,
+        "operations": _serialize_value(operations),
+        "snapshot": _serialize_value(snapshot_state),
+    }
+
+    file_content = json.dumps(
+        migration_payload,
+        indent=4,
+        ensure_ascii=False,
     )
 
-    output_path.write_text(
-        json.dumps(asdict(migration_file), indent=4, sort_keys=True),
-        encoding="utf-8",
-    )
-    return output_path
+    migration_file_path.write_text(file_content + "\n", encoding="utf-8")
+    return migration_file_path
