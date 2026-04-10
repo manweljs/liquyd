@@ -1,3 +1,4 @@
+# src/liquyd/engines/base.py
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -53,3 +54,6 @@ class EngineAdapter(ABC):
         *,
         client_name: ClientName | None = None,
     ) -> Any: ...
+
+    @abstractmethod
+    async def close_client(self, client_name: ClientName | None = None) -> None: ...

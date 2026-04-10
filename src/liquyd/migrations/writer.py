@@ -42,7 +42,7 @@ def write_migration_file(
         "created_at": created_at.isoformat(),
         "previous": previous_migration_name,
         "operations": _serialize_value(operations),
-        "snapshot": _serialize_value(snapshot_state),
+        "snapshot": {},
     }
 
     file_content = json.dumps(

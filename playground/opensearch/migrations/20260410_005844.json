@@ -1,0 +1,44 @@
+{
+    "name": "20260410_005844",
+    "created_at": "2026-04-10T00:58:44.726047+00:00",
+    "previous": "20260410_005731",
+    "operations": [
+        {
+            "type": "create_index",
+            "document_name": "PlaygroundStore",
+            "index_name": "liquyd_playground_stores",
+            "field_name": null,
+            "old_value": null,
+            "new_value": {
+                "document_name": "PlaygroundStore",
+                "index_name": "liquyd_playground_stores",
+                "fields": {
+                    "id": {
+                        "name": "id",
+                        "python_type": "str",
+                        "engine_type": "keyword",
+                        "nullable": false,
+                        "primary_key": true
+                    },
+                    "name": {
+                        "name": "name",
+                        "python_type": "str",
+                        "engine_type": "text",
+                        "nullable": true,
+                        "primary_key": false
+                    },
+                    "location": {
+                        "name": "location",
+                        "python_type": "UnionType[str, NoneType]",
+                        "engine_type": "text",
+                        "nullable": true,
+                        "primary_key": false
+                    }
+                }
+            },
+            "message": "Document is new and requires index creation.",
+            "breaking": false
+        }
+    ],
+    "snapshot": {}
+}

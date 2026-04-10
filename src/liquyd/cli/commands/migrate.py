@@ -172,6 +172,27 @@ def _handle_delete_index(
     client.indices.delete(index=index_name)
 
 
+def _handle_remove_field(
+    operation: dict[str, Any],
+) -> None:
+    document_name = operation["document_name"]
+    field_name = operation.get("field_name")
+    print(
+        f"Warning: OpenSearch remove_field is treated as noop for "
+        f"'{document_name}.{field_name}'."
+    )
+
+
+def _handle_reindex_required(
+    operation: dict[str, Any],
+) -> None:
+    document_name = operation["document_name"]
+    print(
+        f"Warning: OpenSearch reindex_required is treated as noop for "
+        f"'{document_name}'."
+    )
+
+
 def _handle_unsupported_operation(operation: dict[str, Any]) -> None:
     raise NotImplementedError(
         f"Operation '{operation['type']}' is not implemented for OpenSearch migrate yet."
@@ -211,9 +232,9 @@ def migrate(
                 client=client,
                 operation=operation,
             ),
-            "remove_field": _handle_unsupported_operation,
+            "remove_field": _handle_remove_field,
             "change_field": _handle_unsupported_operation,
-            "reindex_required": _handle_unsupported_operation,
+            "reindex_required": _handle_reindex_required,
         }
 
         return migrate_client(

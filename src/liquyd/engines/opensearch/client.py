@@ -1,3 +1,4 @@
+# src/liquyd/engines/opensearch/client.py
 from __future__ import annotations
 
 from threading import RLock
@@ -6,6 +7,7 @@ from opensearchpy import AsyncOpenSearch
 
 from ...config import get_client_config
 from ...types import ClientName
+from ...runtime import ensure_runtime_started
 
 
 class OpenSearchClientRegistry:
@@ -14,6 +16,8 @@ class OpenSearchClientRegistry:
         self._clients: dict[ClientName, AsyncOpenSearch] = {}
 
     def get_client(self, client_name: ClientName | None = None) -> AsyncOpenSearch:
+        ensure_runtime_started()
+
         resolved_client_name = client_name or "default"
 
         with self._lock:

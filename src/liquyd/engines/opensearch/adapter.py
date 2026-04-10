@@ -1,3 +1,4 @@
+# src/liquyd/engines/opensearch/adapter.py
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -5,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy import NotFoundError
 
 from ..base import EngineAdapter
-from .client import get_opensearch_client
+from .client import close_opensearch_client, get_opensearch_client
 from .translator import translate_queryset
 
 if TYPE_CHECKING:
@@ -57,7 +58,9 @@ class OpenSearchEngineAdapter(EngineAdapter):
         return queryset.filters[primary_key_name]
 
     async def _get_by_primary_key(
-        self, queryset: QuerySet, primary_key_value: Any
+        self,
+        queryset: QuerySet,
+        primary_key_value: Any,
     ) -> Any:
         client = self.get_client(queryset.client_name)
 
@@ -222,6 +225,9 @@ class OpenSearchEngineAdapter(EngineAdapter):
             "created": True,
             "response": dict(response),
         }
+
+    async def close_client(self, client_name: str | None = None) -> None:
+        await close_opensearch_client(client_name)
 
 
 opensearch_engine = OpenSearchEngineAdapter()

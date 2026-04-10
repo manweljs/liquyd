@@ -53,7 +53,7 @@ def load_migration_file(migration_file_path: Path) -> MigrationFile:
         name=migration["name"],
         created_at=migration.get("created_at", ""),
         previous_migration_name=migration.get("previous"),
-        snapshot=migration["snapshot"],
+        snapshot=migration.get("snapshot", {}),
         operations=migration["operations"],
         path=str(migration_file_path),
     )

@@ -13,21 +13,6 @@ OperationHandler = Callable[[dict], None]
 MigrationRecordWriter = Callable[[dict], None]
 
 
-def _assert_migration_can_run(
-    migration: MigrationFile,
-    allow_breaking: bool,
-) -> None:
-    has_breaking_operation = any(
-        operation.get("breaking", False) for operation in migration.operations
-    )
-
-    if has_breaking_operation and not allow_breaking:
-        raise ValueError(
-            f"Migration '{migration.name}' contains breaking changes. "
-            "Re-run with allow_breaking=True after review."
-        )
-
-
 def _run_operation(
     operation: dict,
     operation_handlers: dict[str, OperationHandler],
@@ -50,20 +35,7 @@ def apply_migration(
     record_writer: MigrationRecordWriter,
     allow_breaking: bool = False,
 ) -> None:
-    _assert_migration_can_run(
-        migration=migration,
-        allow_breaking=allow_breaking,
-    )
-
     for operation in migration.operations:
-        if operation["type"] == "reindex_required":
-            if not allow_breaking:
-                raise ValueError(
-                    f"Migration '{migration.name}' requires reindex and cannot be "
-                    "applied without allow_breaking=True."
-                )
-            continue
-
         _run_operation(
             operation=operation,
             operation_handlers=operation_handlers,

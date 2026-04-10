@@ -5,12 +5,10 @@ from pathlib import Path
 
 from liquyd.migrations.differ import diff_snapshot_states
 from liquyd.migrations.discovery import iter_documents
-from liquyd.migrations.loader import get_last_migration
+from liquyd.migrations.loader import get_last_migration, load_client_migrations
 from liquyd.migrations.planner import plan_operations
-from liquyd.migrations.snapshot import (
-    build_snapshot_state,
-    build_snapshot_state_from_dict,
-)
+from liquyd.migrations.replay import reconstruct_snapshot_state
+from liquyd.migrations.snapshot import build_snapshot_state
 from liquyd.migrations.writer import write_migration_file
 
 
@@ -28,15 +26,16 @@ def makemigrations(
             print(f"  - {document_class.__module__}.{document_class.__name__}")
 
     current_snapshot_state = build_snapshot_state()
+    migration_chain = load_client_migrations(base_directory=base_directory)
     last_migration = get_last_migration(base_directory=base_directory)
 
     previous_snapshot_state = None
     previous_migration_name = None
 
+    if migration_chain:
+        previous_snapshot_state = reconstruct_snapshot_state(migration_chain)
+
     if last_migration is not None:
-        previous_snapshot_state = build_snapshot_state_from_dict(
-            last_migration.snapshot
-        )
         previous_migration_name = last_migration.name
 
     document_diffs = diff_snapshot_states(
