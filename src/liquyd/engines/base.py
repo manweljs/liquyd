@@ -29,6 +29,17 @@ class EngineAdapter(ABC):
     async def get(self, queryset: QuerySet) -> Any: ...
 
     @abstractmethod
+    async def count(self, queryset: QuerySet) -> int: ...
+
+    @abstractmethod
+    async def aggregate(
+        self, queryset: QuerySet, aggregations: dict[str, Any]
+    ) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def paginate(self, queryset: QuerySet) -> tuple[list[Any], int]: ...
+
+    @abstractmethod
     async def save_document(
         self,
         *,

@@ -141,6 +141,56 @@ class OpenSearchEngineAdapter(EngineAdapter):
 
         return self._hydrate_hit(queryset, dict(hits[0]))
 
+    async def count(self, queryset: QuerySet) -> int:
+        client = self.get_client(queryset.client_name)
+        request_body = self.build_query(queryset)
+        response = await client.count(
+            index=queryset.get_index_name(),
+            body={"query": request_body["query"]},
+        )
+        return int(response.get("count", 0))
+
+    async def aggregate(
+        self, queryset: QuerySet, aggregations: dict[str, Any]
+    ) -> dict[str, Any]:
+        request_body = self.build_query(queryset)
+        request_body.pop("from", None)
+        request_body.pop("sort", None)
+        request_body["size"] = 0
+        request_body["aggs"] = {
+            name: aggregation.build(queryset.document_class)
+            for name, aggregation in aggregations.items()
+        }
+
+        client = self.get_client(queryset.client_name)
+        response = await client.search(
+            index=queryset.get_index_name(),
+            body=request_body,
+        )
+        raw_aggregations = response.get("aggregations", {})
+        return {
+            name: aggregation.parse(raw_aggregations.get(name, {}))
+            for name, aggregation in aggregations.items()
+        }
+
+    async def paginate(self, queryset: QuerySet) -> tuple[list[Any], int]:
+        client = self.get_client(queryset.client_name)
+        request_body = self.build_query(queryset)
+        request_body["track_total_hits"] = True
+        response = await client.search(
+            index=queryset.get_index_name(),
+            body=request_body,
+        )
+
+        hits_container = response.get("hits", {})
+        hits = hits_container.get("hits", [])
+        raw_total = hits_container.get("total", 0)
+        total = int(
+            raw_total.get("value", 0) if isinstance(raw_total, dict) else raw_total
+        )
+        items = [self._hydrate_hit(queryset, dict(hit)) for hit in hits]
+        return items, total
+
     async def save_document(
         self,
         *,
