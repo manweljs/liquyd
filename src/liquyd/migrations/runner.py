@@ -8,7 +8,6 @@ from liquyd.migrations.loader import iter_pending_migrations
 from liquyd.migrations.state import build_applied_migration_record
 from liquyd.migrations.types import MigrationFile
 
-
 OperationHandler = Callable[[dict], None]
 MigrationRecordWriter = Callable[[dict], None]
 

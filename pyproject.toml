@@ -16,12 +16,12 @@ dependencies = [
     "opensearch-py[async] (>=3.1.0,<4.0.0)",
     "python-dotenv (>=1.2.2,<2.0.0)",
 ]
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.3.0,<9.0.0",
-    "pytest-asyncio>=0.24.0,<1.0.0",
-    "ruff>=0.6.0,<1.0.0",
-]
+[tool.poetry.group.dev.dependencies]
+poethepoet = ">=0.37.0,<1.0.0"
+pyright = "^1.1.408"
+pytest = ">=8.3.0,<9.0.0"
+pytest-asyncio = ">=0.24.0,<1.0.0"
+ruff = ">=0.6.0,<1.0.0"
 
 [tool.poetry]
 packages = [
@@ -33,11 +33,22 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+
+[tool.poe.tasks]
+lint = "ruff check src"
+typecheck = "pyright src"
+check = ["lint", "typecheck"]
+test = "pytest"
 
 [project.scripts]
 liquyd = "liquyd.cli.main:main"

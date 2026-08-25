@@ -6,8 +6,8 @@ from threading import RLock
 from opensearchpy import AsyncOpenSearch
 
 from ...config import get_client_config
-from ...types import ClientName
 from ...runtime import ensure_runtime_started
+from ...types import ClientName
 
 
 class OpenSearchClientRegistry:
